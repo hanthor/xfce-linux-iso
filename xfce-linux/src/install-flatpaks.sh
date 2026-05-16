@@ -72,7 +72,9 @@ readarray -t WANTED < <(grep -v '^[[:space:]]*#' /tmp/flatpaks-list | grep -v '^
 
 # Install or update everything in the list (--or-update = skip if current)
 # --no-related skips locale packs and debug symbols (~3 GB uncompressed)
-flatpak install --system --noninteractive --no-related --or-update flathub "${WANTED[@]}"
+if [[ ${#WANTED[@]} -gt 0 ]]; then
+    flatpak install --system --noninteractive --no-related --or-update flathub "${WANTED[@]}"
+fi
 
 # Remove any system app that is no longer in the wanted list
 readarray -t INSTALLED < <(flatpak list --app --system --columns=application 2>/dev/null || true)
