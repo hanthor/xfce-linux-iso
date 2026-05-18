@@ -41,8 +41,19 @@ build-bg target:
     tail -f "${LOG}"
 
 container target:
+    #!/usr/bin/bash
+    set -euo pipefail
+    # Pre-squash base image to avoid disk explosion during multi-layer pulls
+    BASE_IMAGE=$(grep '^ARG BASE_IMAGE=' ./{{target}}/Containerfile | cut -d= -f2)
+    echo "Squashing base image: ${BASE_IMAGE}"
+    SQUASH_CTR=$(sudo buildah from --pull-never "${BASE_IMAGE}" 2>/dev/null || sudo buildah from "${BASE_IMAGE}")
+    sudo buildah commit --squash "${SQUASH_CTR}" oci-archive:/tmp/squashed-base.oci:"${BASE_IMAGE}"
+    sudo podman load -i /tmp/squashed-base.oci
+    rm -f /tmp/squashed-base.oci
+
     sudo podman build --cap-add sys_admin --security-opt label=disable \
         --layers \
+        --build-arg BASE_IMAGE="${BASE_IMAGE}" \
         --build-arg DEBUG={{debug}} \
         --build-arg INSTALLER_CHANNEL={{installer_channel}} \
         -t {{target}}-installer ./{{target}}
@@ -98,10 +109,9 @@ iso-sd-boot target:
         printf '[storage]\ndriver = \"vfs\"\nrunroot = \"/tmp/cs-runroot\"\ngraphroot = \"/vfs-storage\"\n' \
             > \"\${STORAGE_CONF}\"
 
-        echo 'Exporting xfce-linux OCI image to archive...'
-        skopeo copy \
-            containers-storage:${PAYLOAD_REF} \
-            oci-archive:\${PAYLOAD_OCI}:${PAYLOAD_REF}
+        echo 'Squashing xfce-linux image layers to reduce disk footprint...'
+        SQUASH_CTR=\$(buildah from --pull-never \"${PAYLOAD_REF}\")
+        buildah commit --squash \"\${SQUASH_CTR}\" oci-archive:\${PAYLOAD_OCI}:${PAYLOAD_REF}
 
         echo 'Importing xfce-linux OCI image into squashfs containers-storage...'
         podman run --rm \
