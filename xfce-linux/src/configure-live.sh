@@ -20,8 +20,14 @@ fi
 
 # ── Live user ─────────────────────────────────────────────────────────────────
 # Create or ensure liveuser exists with no password
-getent passwd liveuser >/dev/null 2>&1 || useradd --create-home --uid 1000 --user-group \
-    --comment "Live User" liveuser
+if ! getent passwd liveuser >/dev/null 2>&1; then
+    # Try to create with UID 1000, but fall back to auto-assign if taken
+    useradd --create-home --uid 1000 --user-group \
+        --comment "Live User" liveuser 2>/dev/null || \
+    useradd --create-home --user-group \
+        --comment "Live User" liveuser
+fi
+# Remove password for passwordless login
 passwd --delete liveuser 2>/dev/null || true
 
 # Debug builds: enable SSH and root access for testing.
